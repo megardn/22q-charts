@@ -1,0 +1,65 @@
+---
+title: "GAM+ Workshop Tutorial"
+output: html_document
+date: '2022-10-27'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Doing [workshop video on GAMs and GAMLSS](https://www.youtube.com/watch?v=a6sTwkQGt3E) from R Consortium, with accompanying exercises from [github](https://github.com/mfasiolo/workshop_UseR18).
+
+### Workshop prep described in README:
+
+```{r load_packages}
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(devtools, mgcViz)
+
+install_github("mfasiolo/mgcFam")
+install.packages(c("languageR", "gamair", "e1071"))
+```
+
+Test install:
+
+```{r test, eval=FALSE}
+set.seed(2) ## simulate some data...
+dat <- gamSim(2,n=500,dist="normal",scale=0.25)$data
+b <- qgamV(y ~ s(x, z), data = dat, qu = 0.5)
+plotRGL(sm(b, 1), residuals = TRUE)
+
+# Fit GAM and get gamViz object
+b <- mqgamV(y~s(x) + s(z) + I(x*z), data = dat, qu = c(0.2, 0.4, 0.6, 0.8),
+aQgam = list(argGam = list(select = TRUE)), aViz = list("nsim" = 0))
+# Either way, we all effects by doing
+print(plot(b, allTerms = TRUE), pages = 1)
+```
+
+## Intro  to GAMs
+
+### Additive modeling
+In GAM - distribution of y isn't necessarily gaussian but only mean is modeled as function of covariates
+- additive b/c sum of functions of j covariates ($f_j(x)$, where $f_j$'s can be smooth, fixed, or random with coefficients $\beta$), transformed given a link function (g).
+- smooth effects - second function you plug parameters into ($f_2$) which is a sum of "basis" (known) spline functions (B-splines) times a $\beta$ that scales them. This $\beta$ is unknown, so GAM estimates it to get best result when you combine all the shifted B-splines linearly
+- Other Types of Smooths:
+  - other options are cubic regression splines (basis function has a different shape) - minimmize sum of squares of y AND curvature parameter (goodness of fit whie balancing linearity, not too curvy/overfit)
+  - also cyclic cubic regression splines (y at minimum x = y at maximum x)
+  - adaptive smooth - penalize curvature of fit differently depending where you are on x axis (keep fit more or less strictly linear in different parts)
+- thin plate regression splines - for multidimensional data, isotropic (one smoothing parameter/penalty for all dimensions of predictor data (ie x1, x2, etc))
+    - works if x1 and x2 have the same units (otherwise use tensor product smooth)
+- tensor product smooth - smooth in 1 dimension (z) then let teh spline vary smoothy by x dimension
+  - x and z are penalized separately (eg cyclic smooth on one, cubic regression on another)
+  - **can use almost any kind of marginal?? what's a marginal in this context?**
+- by-factor smooth - smooth effect will vary by factor level
+  - can do 2 different ways, with different smoothing parameters (penalty) by level and/or different random intercepts for each level
+Fitting:
+- chose rank r (number basis functions) that's big enough to be flexible BUT penalize regression coefficient $\beta$ to keep from overfitting (shrink towards 0)
+- minimize penalized log likelihood (goodness of fit - complexity penalty)
+Diagnostics:
+- conditional residual checks - bin values, plot mean residual in each bin 
+- effective degrees of freedom (EDF) - # parameters we're effectively using (k basis functions, but actually it's smaller b/c the penalty is shrinking things)
+  - don't set too low, better to overestimate (default = 10)
+  - see if your k is good by using conditional residuals check, increase k and see if model fit (AIC) improves, or `check(fit)` function:
+    - if k' ~ edf -> might be smoothing too much

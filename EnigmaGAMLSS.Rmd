@@ -1,0 +1,108 @@
+---
+title: "GAMLSS-Sandbox"
+output: html_document
+date: '2022-09-13'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(gamlss, gamlss.cens, gamlss.dist, gamlss.mx, gamlss.tr, ggplot2, tidyverse, ggpubr, skimr)
+```
+
+GAMLSS of control data from ENIGMA 22q against which to calculate cases' centiles (degree of abnormality from a given trajectory). Trajectories are calculated seperately for males and females across age.
+
+## Cleaning
+
+Questions:
+- participants with repeat scans? (alfredo's script only keeps 1st instance)
+- additional QC of results
+
+```{r}
+#load FreeSurfer Structural Data
+fs.struc <- read.csv("/Users/megardn/Desktop/aab_rotation/_structural_stats.csv")
+
+#summary(fs.struc)
+#dim(fs.struc)
+any(duplicated(fs.struc$subjId)) #check for duplicate subjects
+n_unique(fs.struc$subjId)
+fs.struc[duplicated(fs.struc$subjId),1] ### NEED TO CORRECT 09mm
+
+#colnames(fs.struc)
+#head(fs.struc)
+```
+
+
+```{r}
+#calculate euler number
+fs.struc <- fs.struc %>%
+  mutate(euler = (2-2*SurfaceHoles))
+summary(fs.struc$euler)
+```
+
+
+```{r}
+#load demographics
+demo <- read.csv("/Users/megardn/Desktop/aab_rotation/lifespan_data.csv")
+colnames(demo) ### WHAT'S X?
+dim(demo)
+
+#drop structural data since we're getting that from FS spreadsheet
+demo <- demo %>% select(1:4,11:19)
+any(duplicated(demo$participant)) #check for duplicate subjects
+
+
+demo.edit <- demo %>% mutate(participant = str_replace_all(participant, "_", ""), #removing _'s from participant IDs to match FS df
+                             age_yrs=age_days/365.25) #calc age in yrs
+```
+
+Let's just try a simple join and see what happens
+
+```{r}
+#get distinct IDs between FS and demo subjects
+no.fs <- left_join(demo.edit, fs.struc, by=c("participant"="subjId")) %>%
+  filter(is.na(TotalGrayVol))
+
+no.demo <- right_join(demo.edit, fs.struc, by=c("participant"="subjId")) %>%
+  filter(is.na(sex))
+
+#join
+fs.demo <- left_join(demo.edit, fs.struc, by=c("participant"="subjId")) %>%
+  drop_na(TotalGrayVol) 
+dim(fs.demo) #proceeding with this df for now
+```
+
+## EDA
+
+
+```{r}
+#age frequency
+fs.demo %>%
+  ggplot(aes(age_yrs)) +
+  geom_histogram(binwidth = 3, fill="darkgreen")
+
+#holes
+fs.demo %>%
+  ggplot(aes(Holes)) +
+  geom_histogram(binwidth = 5, fill="darkgreen")
+
+#euler
+fs.demo %>%
+  ggplot(aes(euler)) +
+  geom_histogram(binwidth = 5, fill="darkgreen")
+
+#GM vs WM
+ggplot(fs.demo, aes(x=TotalGrayVol, y=CerebralWhiteMatterVol)) +
+  geom_point()
+```
+
+## GAMLSS
+
+Pulls HEAVILY from Alfredo's `GAMLSS4CLIP_v1_R.r` for now
+
+```{r}
+
+
+```

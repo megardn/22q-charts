@@ -1,0 +1,84 @@
+---
+title: "GAMLSS Playground"
+output: html_document
+date: '2022-09-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(gamlss, gamlss.cens, gamlss.dist, gamlss.mx, gamlss.tr, ggplot2, tidyverse, ggpubr, skimr, gamlss.data)
+```
+
+Scripts for working through tutorials in Stasinopoulos's "Flexible Regression and Smoothing Using GAMLSS in R"
+
+#### Intro/LMs
+
+```{r lm}
+head(rent)
+
+r1 <- gamlss(R ~ Fl+A+H+loc, family=NO,  data=rent, trace=FALSE) #linear model
+summary(r1)
+```
+
+family: defines distribution of response variable/link functions of parameters
+
+`summary()` breakdown
+
+Fitting method:
+
+Mu link function:
+Mu Coefficients:
+
+Sigma Link function: type of function used to link sigma (SD) to data
+-- log link -> sigma_hat=exp(Intercept Estimate)=exp(5.73165) to solve for standard deviation
+Sigma Coefficients: plug into inverse link function to get SDs of parameter
+
+Global Deviance: -2log(fitted likelihood of current fitted model)
+AIC:
+SBC: aka BIC
+*GAIC:* generalized AIC, return using `GAIC(model, k)`
+-- k=penalty parameter for each df
+
+```{r}
+#fitted(r1, "sigma") #maximum likelihood estimator of sigma (vector)
+Rsq(r1) #R squared 
+plot(r1) #plot residuals
+```
+
+Example violates non-homogeneity of variance, skewness assumptions
+
+#### GLMs
+
+about GLMs:
+- response variable isn't assumed to be normally distributed ("exponential family of distributions")
+- monotonic link function g() modes E(Y)'s relationship to explanatory variables
+-- monotonic - function that preserves or reverses a given order (eg. if one variable changes with another, it won't mix that up)
+- MLE for Beta parameters are calculated by iteratively reweighting least squares algorithm 
+
+```{r glm}
+r2 <-  gamlss(R ~ Fl+A+H+loc, family=GA,  data=rent)
+
+#check AIC vs lm model
+GAIC(r1, r2, k=0) #setting k=0 b/c both models have same # parameters (aka same df?)
+
+plot(r2)
+```
+
+### GAM
+
+Use smoother functions
+
+taki 
+hyperfine
+
+```{r}
+
+
+````
+
+
+
+
