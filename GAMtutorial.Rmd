@@ -17,7 +17,7 @@ Doing [workshop video on GAMs and GAMLSS](https://www.youtube.com/watch?v=a6sTwk
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(devtools, mgcViz, dplyr, gridExtra)
+pacman::p_load(devtools, mgcViz, dplyr, gridExtra, gamlss, tidymv)
 
 install_github("mfasiolo/mgcFam")
 install.packages(c("languageR", "gamair", "e1071"))
@@ -181,7 +181,6 @@ plotRGL(tmp, residuals = TRUE)
 
 ### 5. Bone mineral density modelling
 
-
 ```{r}
 load("exercises/data/calcium.rda")
 ```
@@ -306,4 +305,177 @@ Diagnostics:
 
 ### 4. Body Mass Index (BMI) of Dutch boys
 
+"The use gamV to fit a Gaussian GAM with simply a single smooth effect for age. Set argument aViz=list(nsim = 50) to have some simulated responses for residuals checks. Then plot the data (a scatterplot bmi vs age) and add a line representing the fitted mean BMI (you can use the predict function)."
+
+```{r}
+load("exercises/data/dbbmi.rda")
+
+fit.bmi1 <- gamV(bmi ~ s(age), 
+             family = gaussian,
+             data = dbbmi,
+             aViz = list(nsim = 50))
+summary(fit.bmi1)
+
+#plot data with line to predict
+dbbmi$gam.fit <-  (predict(fit.bmi1, se = TRUE))$fit #get mean prediction
+dbbmi$gam.fit.se <-  (predict(fit.bmi1, se = TRUE))$se.fit #get SE for Ci's
+
+ggplot(dbbmi, aes(x = age, y = bmi) ) +
+  geom_point(color="lightgreen") +
+  geom_ribbon(aes(ymin = (gam.fit - 2*gam.fit.se), ymax = (gam.fit + 2*gam.fit.se)), fill="black", alpha = .3) +
+  geom_line(aes(y = gam.fit), size = 1)
+```
+
+"Check the residual distribution using qq: do you see any problem? Then use the check1D function together with the l_gridCheck1D(gridFun=sd) layer to check whether the conditional standard deviation of the residuals varies with age."
+
+```{r}
+#gam residuals
+qq(fit.bmi1, method = "simul2")
+
+#plot residuals mean & SDs
+check1D(fit.bmi1, "age") + l_gridCheck1D(mean) 
+check1D(fit.bmi1, "age") + l_gridCheck1D(gridFun=sd)
+```
+
+Variance changes A LOT with age!
+
+"If so address this by fitting a Gaussian GAMLSS model (family = gaulss), with model formula list(bmi ~ s(age), ~ s(age)). Then repeat the residuals checks. Any improvement?"
+
+```{r}
+fit.bmi2 <- gamV(list(bmi ~ s(age), ~ s(age)), 
+             family = gaulss,
+             data = dbbmi,
+             aViz = list(nsim = 50))
+
+#recheck residuals
+check1D(fit.bmi2, "age") + l_gridCheck1D(mean)
+check1D(fit.bmi2, "age") + l_gridCheck1D(gridFun=sd)
+```
+
+All residuals are better! Hurrah!
+
+"Use check to verify whether the number of basis functions used for the smooth effects is sufficiently large. Then increase the number of basis functions used for each effect to 20 (k=20), and use an adaptive basis fom the effect of age on mean BMI (bs = "ad")."
+
+```{r}
+check(fit.bmi2)
+
+#refitting
+fit.bmi3 <- gamV(list(bmi ~ s(age, k=20, bs="ad"), ~ s(age, k=20, bs="ad")), 
+             family = gaulss,
+             data = dbbmi,
+             aViz = list(nsim = 50))
+check(fit.bmi3)
+
+#plotting for fun
+pred <- predict(fit.bmi3, what="mu", type="response")
+names(pred)
+pred
+
+pred.all <- gamlss::predictAll(fit.bmi3)
+
+dbbmi$gamlss.fit <-  (predict(fit.bmi3, se = TRUE))$fit #get mean prediction
+dbbmi$gamlss.fit.se.low <-  (predict(fit.bmi3, se = TRUE))$se.fit #get SE for Ci's
+
+ggplot(dbbmi, aes(x = age, y = bmi) ) +
+  geom_point(color="lightblue") +
+  geom_ribbon(aes(ymin = (gamlss.fit - 2*gamlss.fit.se), ymax = (gamlss.fit + 2*gamlss.fit.se)), fill="black", alpha = .3) +
+  geom_line(aes(y = gamlss.fit), size = 1)
+```
+
 ### 5. Rent modelling in Munich
+
+
+# Playing Around
+Messing around with some data/visuals for QNC class presentation
+
+```{r}
+#making a fake stage variable for DB BMI dataset
+fake.stage.list <- c("A","B","C","D","E")
+dbbmi <- dbbmi %>% mutate(sim.stage = case_when(
+                  age < 11 ~ sample(x=fake.stage.list, size=7294, replace=TRUE, prob=c(0.5, 0.25, 0.2, 0.05, 0)), 
+                  age >= 11 & age < 14 ~ sample(x=fake.stage.list, size=7294, replace=TRUE, prob=c(0.25, 0.5, 0.15, 0.05, 0.05)),
+                  age >= 14 & age < 16 ~ sample(x=fake.stage.list, size=7294, replace=TRUE, prob=c(0, 0.2, 0.5, 0.2, 0.1)),
+                  age >= 16 & age < 18 ~ sample(x=fake.stage.list, size=7294, replace=TRUE, prob=c(0, 0.1, 0.2, 0.5, 0.2)),
+                  age >= 18 ~ "E"))
+
+```
+
+```{r}
+#OK, let's make a GAM
+fit.bmi.sim <- gamV(bmi ~ s(age, by=as.factor(sim.stage), k=20, bs="ad"), 
+             family = gaussian,
+             data = dbbmi,
+             aViz = list(nsim = 50))
+check(fit.bmi.sim)
+
+#predictions
+dbbmi$sim.gam.fit <-  (predict(fit.bmi.sim, se = TRUE))$fit #get mean prediction
+dbbmi$sim.gam.fit.se <- (predict(fit.bmi.sim, se = TRUE))$se.fit #get SE for Ci's
+
+#plot test
+opt1 <- ggplot(dbbmi, aes(x = age, y = bmi) ) +
+  geom_point(aes(color=sim.stage), alpha=.2) +
+  #geom_ribbon(aes(ymin = (sim.gam.fit - 2*sim.gam.fit.se), ymax = (sim.gam.fit + 2*sim.gam.fit.se)), fill="black", alpha = .3) +
+  geom_line(data=subset(dbbmi, sim.stage=="A"),aes(y = sim.gam.fit, color=sim.stage), linetype="dashed", size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="B"),aes(y = sim.gam.fit, color=sim.stage), linetype="dashed", size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="C"),aes(y = sim.gam.fit, color=sim.stage), linetype="dashed", size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="D"),aes(y = sim.gam.fit, color=sim.stage), linetype="dashed", size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="E"),aes(y = sim.gam.fit, color=sim.stage), linetype="dashed", size = 1) +
+  ylab("phenotype") +
+  theme_bw()
+
+#save
+ggsave(
+  "test_plot1.png", height=8, width=15, units="in",
+  plot = last_plot())
+
+#plot test 2
+opt2 <- ggplot(dbbmi, aes(x = age, y = bmi) ) +
+  geom_point(aes(color=sim.stage), alpha=.2) +
+  #geom_ribbon(aes(ymin = (sim.gam.fit - 2*sim.gam.fit.se), ymax = (sim.gam.fit + 2*sim.gam.fit.se)), fill="black", alpha = .3) +
+  geom_line(data=subset(dbbmi, sim.stage=="A"),aes(y = sim.gam.fit), size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="B"),aes(y = sim.gam.fit), size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="C"),aes(y = sim.gam.fit), size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="D"),aes(y = sim.gam.fit), size = 1) +
+  geom_line(data=subset(dbbmi, sim.stage=="E"),aes(y = sim.gam.fit), size = 1) +
+  ylab("phenotype") +
+  theme_bw() +
+  facet_wrap(~sim.stage, ncol = 1)
+
+#save
+ggsave(
+  "test_plot2.png", height=20, width=20, units="in",
+  plot = last_plot())
+```
+Hmm, dont think thats working. Lets try the gamlss package
+
+```{r}
+bmi.gamlss.sim <-gamlss(bmi~pb(age, by=sim.stage), family = GA, data=dbbmi, trace = FALSE)
+summary(bmi.gamlss.sim)
+
+#hopefully adding fitted vals
+dbbmi <- dbbmi %>% mutate(sim.fit = fitted(bmi.gamlss.sim))
+pred <- predict_gam(bmi.gamlss.sim)
+summary(dbbmi)
+
+#plot
+dbbmi %>% ggplot(aes(y=fit, x=age)) +  
+    geom_point(aes(x=age, y=bmi, color = sim.stage, shape=sim.stage), alpha=.6) +
+    geom_smooth_ci()
+
+  
+
+plot(bmi~age, col = fake.stage, data = dbbmi)
+lines(fitted(bmi.gamlss.sim)[order(dbbmi$age)]~dbbmi$age[order(dbbmi$age)])
+
+#plot
+gam.plots <- list()
+for (stage in fake.stage)
+  {
+  plot.test<- ggplot(data=subset(dbbmi, fake.stage==stage),aes(y=bmi, x=age))+ 
+    geom_point(fill="lightgreen")
+  #lines(fitted(bmi.gamlss.sim)[order(dbbmi$age)]~dbbmi$age[order(dbbmi$age)])
+  gam.plots[[stage]] <- plot.test
+}
+gam.plots
+```
