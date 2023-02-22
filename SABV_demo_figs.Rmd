@@ -1,0 +1,89 @@
+---
+title: "SABV options"
+output: html_document
+date: '2023-02-21'
+---
+
+```{r setup, include=FALSE}
+pacman::p_load(tidyverse, ggplot2, ggiraphExtra, ggeffects, ggpubr)
+```
+
+Simulate some data
+
+```{r}
+set.seed(16)
+df <- data.frame(sex = as.factor(rep(c("M", "F"), length.out=50)),
+           gene_expression = rnorm(n = 50, mean=c(100,80), sd=45))
+df <- df %>% mutate(brain_pheno = case_when(
+  sex == "M" ~ rnorm(n=25, mean=10, sd=4)*(gene_expression/8),
+  TRUE ~ rnorm(n=25, mean=7, sd=4)*(gene_expression/10)
+  ))
+```
+
+```{r}
+#Sex-agnostic
+slope1 <- round(coef(lm(df$brain_pheno~df$gene_expression))[2], digits=3)
+
+a <- ggplot(df, aes(x=gene_expression, y=brain_pheno)) + 
+  geom_point(aes(color=sex)) + 
+  geom_smooth(method = "lm", color="black") +
+  annotate("text",x=25,y=350,label=(paste0("slope=",slope1))) +
+  ggtitle("Mixed-Sex Analysis")
+```
+
+
+```{r}
+#Sex-covarying
+fit1 <- lm(brain_pheno~gene_expression+sex,data=df)
+slope2 <- round(coef(fit1)[2], digits=3)
+
+b <- ggPredict(fit1,se=TRUE,interactive=FALSE) +
+  ggtitle("Analysis Controlling for Sex") +
+  annotate("text",x=25,y=350,label=(paste0("slope=",slope2)))
+
+dummy <- ggpredict(fit1, terms = "gene_expression")
+slope3 <- slope1 <- round(coef(lm(dummy$predicted~dummy$x))[2], digits=3) #confirming same as above
+c <- ggplot() +
+  geom_point(aes(x=df$gene_expression, y=df$brain_pheno, color=df$sex)) +
+  geom_line(aes(x=dummy$x, y=dummy$predicted)) +
+  geom_ribbon(aes(x=dummy$x, y=dummy$predicted, ymin = dummy$conf.low, ymax = dummy$conf.high, xmin=min(df$gene_expression), xmax=max(df$gene_expression)), alpha = .1)  +
+  annotate("text",x=25,y=350,label=(paste0("slope=",slope3))) +
+  ggtitle("Analysis Controlling for Sex")
+```
+
+
+```{r}
+ggarrange(a, b, c)
+```
+
+```{r}
+df.m <- df %>% filter(sex=="M")
+slope.m1 <- round(coef(lm(df.m$brain_pheno~df.m$gene_expression))[2], digits=3)
+
+df.f <- df %>% filter(sex=="F")
+slope.f1 <- round(coef(lm(df.f$brain_pheno~df.f$gene_expression))[2], digits=3)
+
+#Sex-Stratified Analysis
+ggplot(df, aes(x=gene_expression, y=brain_pheno, color=sex)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  annotate("text",x=25,y=350,label=(paste0("Female slope=",slope.f1))) +
+  annotate("text",x=25,y=300,label=(paste0("Male slope=",slope.m1))) +
+  ggtitle("Sex-Stratified Analysis")
+```
+
+```{r}
+int.mod <- lm(formula="brain_pheno ~ gene_expression*sex", data=df)
+summary(int.mod)
+
+slope.f2 <- round(coef(int.mod)[2], digits=3)
+slope.m2 <- round(coef(int.mod)[2] + coef(int.mod)[4], digits=3)
+
+#Sex-interaction
+ggPredict(int.mod,se=TRUE,interactive=FALSE) +
+  annotate("text",x=25,y=350,label=(paste0("Female slope=",slope.f2))) +
+  annotate("text",x=25,y=300,label=(paste0("Male slope=",slope.m2))) +
+  ggtitle("Sex-Interaction Analysis")
+```
+
+

@@ -479,3 +479,50 @@ for (stage in fake.stage)
 }
 gam.plots
 ```
+
+## Book Tutorials
+Playing with RS, CG and mixed optimization methods
+
+```{r}
+system.time(capture.output(m1 <- gamlss(fish~log(lake), sigma.fo=~log(lake), family=PIG, data=species)))
+system.time(capture.output(m2 <- gamlss(fish~log(lake), sigma.fo=~log(lake), family=PIG, data=species, method=CG(), n.cyc=100)))
+system.time(capture.output(m3 <- gamlss(fish~log(lake), sigma.fo=~log(lake), family=PIG, data=species, method=mixed(1,100))))
+```
+
+
+```{r}
+summary(m1)
+summary(m2)
+summary(m3)
+
+wp(m1)
+wp(m2)
+wp(m3)
+
+m1$sbc
+m2$sbc
+m3$sbc
+
+GAIC(m1, m2, m3, k=2)
+GAIC(m1, m2, m3, k=3)
+GAIC(m1, m2, m3, k=4)
+GAIC(m1, m2, m3, k=log(nrow(species)))
+```
+
+```{r}
+m1.rs <- gamlss(OILPRICE~pb(respLAG) + pb(HO1_log),
+                sigma.formula = ~pb(respLAG) + pb(HO1_log),
+                nu.formula = ~pb(respLAG) + pb(HO1_log),
+                tau.formula = ~pb(respLAG) + pb(HO1_log),
+                family=SHASHo, data=oil, method=RS(20))
+m1.mx <- gamlss(OILPRICE~pb(respLAG) + pb(HO1_log),
+                sigma.formula = ~pb(respLAG) + pb(HO1_log),
+                nu.formula = ~pb(respLAG) + pb(HO1_log),
+                tau.formula = ~pb(respLAG) + pb(HO1_log),
+                family=SHASHo, data=oil, method=mixed(10, 10), gd.tol=Inf)
+
+GAIC(m1.rs, m1.mx, k=2)
+GAIC(m1.rs, m1.mx, k=3)
+GAIC(m1.rs, m1.mx, k=4)
+GAIC(m1.rs, m1.mx, k=log(nrow(oil)))
+```
